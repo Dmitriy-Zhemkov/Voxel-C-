@@ -2,32 +2,7 @@
 #include <fstream>
 #include <sstream>
 #include <iostream>
-using namespace cube;
-
-static std::string readText(const std::string& f) {
-    std::ifstream in(f, std::ios::in); if (!in) return {};
-    std::stringstream ss; ss << in.rdbuf(); return ss.str();
-}
-
-GLuint Shader::compile(GLenum type, const std::string& src) {
-    GLuint s = glCreateShader(type);
-    const char* c = src.c_str(); glShaderSource(s, 1, &c, nullptr); glCompileShader(s);
-    int ok; glGetShaderiv(s, GL_COMPILE_STATUS, &ok);
-    if (!ok) {
-        char log[512]; glGetShaderInfoLog(s, 512, nullptr, log);
-        std::cerr << (type == GL_VERTEX_SHADER ? "[VS] " : "[FS] ") << log << "\n";
-    }
-    return s;
-}
-
-bool Shader::load(const std::string& vsf, const std::string& fsf) {
-    std::string vsrc = readText(vsf), fsrc = readText(fsf);
-    if (vsrc.empty() || fsrc.empty()) { std::cerr << "Shader: cannot open " << vsf << " or " << fsf << "\n"; return false; }
-    GLuint vs = compile(GL_VERTEX_SHADER, vsrc), fs = compile(GL_FRAGMENT_SHADER, fsrc);
-    m_id = glCreateProgram(); glAttachShader(m_id, vs); glAttachShader(m_id, fs); glLinkProgram(m_id);
-    int ok; glGetProgramiv(m_id, GL_LINK_STATUS, &ok);
-    if (!ok) { char log[512]; glGetProgramInfoLog(m_id, 512, nullptr, log); std::cerr << "[Link] " << log << "\n"; m_id = 0; }
-    glDeleteShader(vs); glDeleteShader(fs);
-    std::cout << "vertex OK / fragment OK / link OK\n";
-    return m_id;
-}
+using namespace cube; static std::string readTxt(const std::string& p) { std::ifstream f(p); std::ostringstream s; s << f.rdbuf(); return s.str(); }
+GLuint Shader::compile(GLenum t, const std::string& src) { GLuint s = glCreateShader(t); const char* c = src.c_str(); glShaderSource(s, 1, &c, nullptr); glCompileShader(s); int ok; glGetShaderiv(s, GL_COMPILE_STATUS, &ok); if (!ok) { char log[512]; glGetShaderInfoLog(s, 512, nullptr, log); std::cerr << log << "\n"; } return s; }
+bool Shader::load(const std::string& v, const std::string& f) { std::string vs = readTxt(v), fs = readTxt(f); if (vs.empty() || fs.empty()) { std::cerr << "shader files missing\n"; return false; } GLuint vid = compile(GL_VERTEX_SHADER, vs), fid = compile(GL_FRAGMENT_SHADER, fs); m_id = glCreateProgram(); glAttachShader(m_id, vid); glAttachShader(m_id, fid); glLinkProgram(m_id); int ok; glGetProgramiv(m_id, GL_LINK_STATUS, &ok); if (!ok) { char log[512]; glGetProgramInfoLog(m_id, 512, nullptr, log); std::cerr << log << "\n"; m_id = 0; } glDeleteShader(vid); glDeleteShader(fid); return m_id; }
+void Shader::setFloat(const std::string& n, float v)const { glUniform1f(glGetUniformLocation(m_id, n.c_str()), v); } void Shader::setVec3(const std::string& n, const glm::vec3& v)const { glUniform3fv(glGetUniformLocation(m_id, n.c_str()), 1, glm::value_ptr(v)); } void Shader::setMat4(const std::string& n, const glm::mat4& m)const { glUniformMatrix4fv(glGetUniformLocation(m_id, n.c_str()), 1, GL_FALSE, glm::value_ptr(m)); }
