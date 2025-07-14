@@ -1,0 +1,18 @@
+# ninja log v6
+19	150	7742193689473686	CMakeFiles/cubeworld.dir/src/Engine/Renderer.cpp.obj	a73e2a87a4fb7c37
+11	185	7742193689393677	CMakeFiles/cubeworld.dir/src/Engine/Chunk.cpp.obj	d3e6cfddf05fc5aa
+7	441	7742193689353779	CMakeFiles/cubeworld.dir/src/Engine/Camera.cpp.obj	ff145140422606d5
+16	558	7742193689433693	CMakeFiles/cubeworld.dir/src/Engine/ChunkMesh.cpp.obj	caf8c536de7a75e1
+24	592	7742193689516832	CMakeFiles/cubeworld.dir/src/Engine/Shader.cpp.obj	278add3f974a6bc9
+31	633	7742193689594614	CMakeFiles/cubeworld.dir/src/Engine/World.cpp.obj	29ac0e04d27c47b9
+36	725	7742193689634715	CMakeFiles/cubeworld.dir/src/main.cpp.obj	f86a69d53d01d7c9
+27	748	7742193689552861	CMakeFiles/cubeworld.dir/src/Engine/Window.cpp.obj	a28ff067224bc909
+749	1470	7742193696763115	cubeworld.exe	10677da14a9ec605
+30	583	7742196332862781	CMakeFiles/cubeworld.dir/src/Engine/Window.cpp.obj	a28ff067224bc909
+583	1142	7742196338388959	cubeworld.exe	10677da14a9ec605
+30	556	7742196790588856	CMakeFiles/cubeworld.dir/src/Engine/Window.cpp.obj	a28ff067224bc909
+557	1054	7742196795851248	cubeworld.exe	10677da14a9ec605
+26	573	7742196941500917	CMakeFiles/cubeworld.dir/src/Engine/Window.cpp.obj	a28ff067224bc909
+574	1064	7742196946974742	cubeworld.exe	10677da14a9ec605
+28	415	7742200107155995	CMakeFiles/cubeworld.dir/src/Engine/ChunkMesh.cpp.obj	caf8c536de7a75e1
+416	918	7742200111041661	cubeworld.exe	10677da14a9ec605
