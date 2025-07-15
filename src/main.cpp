@@ -5,46 +5,76 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/glm.hpp>
 
-// Проверка, что вокруг позиции нет блоков (6 направлений + центр)
-bool isFree(const cube::World& world, const glm::vec3& pos, float radius = 0.3f) {
-    // Центр
-    if (world.isBlockAt(int(floor(pos.x)), int(floor(pos.y)), int(floor(pos.z))))
+// Проверка точки в мире на коллизию
+bool isPointBlocked(const cube::World& world, const glm::vec3& point) {
+    return world.isBlockAt(int(floor(point.x)), int(floor(point.y)), int(floor(point.z)));
+}
+
+// Проверка, что вокруг позиции нет блоков (включая голову и точку перед камерой)
+bool isFree(const cube::World& world, const glm::vec3& pos, const glm::vec3& front, float radius = 0.49f) {
+    // Проверка центра
+    if (isPointBlocked(world, pos))
         return false;
-    // По 6 направлениям
+
+    // Проверка "головы" (точка выше центра)
+    if (isPointBlocked(world, pos + glm::vec3(0.0f, radius, 0.0f)))
+        return false;
+
+    // Проверка "ног" (точка ниже центра)
+    if (isPointBlocked(world, pos + glm::vec3(0.0f, -radius, 0.0f)))
+        return false;
+
+    // Проверка нескольких точек перед камерой на разном расстоянии
+    for (float dist = 0.1f; dist <= 0.5f; dist += 0.1f) {
+        if (isPointBlocked(world, pos + front * dist))
+            return false;
+    }
+
+    // Проверка по шести направлениям
     for (int axis = 0; axis < 3; ++axis) {
         for (int sign = -1; sign <= 1; sign += 2) {
             glm::vec3 offset(0.0f);
             offset[axis] = sign * radius;
-            glm::vec3 p = pos + offset;
-            if (world.isBlockAt(int(floor(p.x)), int(floor(p.y)), int(floor(p.z))))
+            if (isPointBlocked(world, pos + offset))
                 return false;
         }
     }
     return true;
 }
 
-// Перемещение камеры с учётом коллизии (поочерёдно по осям, учёт объёма камеры)
+// Перемещение камеры с учётом коллизии (сначала диагонально, потом по осям)
 void moveWithCollision(cube::Camera& cam, const cube::World& world, const glm::vec3& delta) {
     glm::vec3 pos = cam.position();
-    float radius = 0.3f;
-    glm::vec3 tryPos = pos;
-    // Двигаем по X
+    float radius = 0.49f;
+    glm::vec3 tryPos = pos + delta;
+    // Сначала пробуем двигаться по всем осям сразу (диагонально)
+    if (isFree(world, tryPos, cam.front(), radius)) {
+        cam.setPosition(tryPos);
+        return;
+    }
+    // Если не получилось — по отдельным осям
+    tryPos = pos;
+
+    // X axis
     tryPos.x += delta.x;
-    if (isFree(world, tryPos, radius)) {
+    if (isFree(world, tryPos, cam.front(), radius)) {
         pos.x = tryPos.x;
     }
     tryPos = pos;
-    // Двигаем по Y
+
+    // Y axis (обычно для прыжков/падения)
     tryPos.y += delta.y;
-    if (isFree(world, tryPos, radius)) {
+    if (isFree(world, tryPos, cam.front(), radius)) {
         pos.y = tryPos.y;
     }
     tryPos = pos;
-    // Двигаем по Z
+
+    // Z axis
     tryPos.z += delta.z;
-    if (isFree(world, tryPos, radius)) {
+    if (isFree(world, tryPos, cam.front(), radius)) {
         pos.z = tryPos.z;
     }
+
     cam.setPosition(pos);
 }
 
@@ -52,14 +82,15 @@ int main() {
     cube::Window win(1280, 720, "Cube World");
     if (!win.init()) return -1;
 
-    cube::Camera cam(70.f, 1280.f / 720.f, 0.1f, 1000.f);
+    // Увеличено значение near clip plane с 0.1f до 0.3f
+    cube::Camera cam(70.f, 1280.f / 720.f, 0.3f, 1000.f);
     win.captureCursor(true); win.attachCamera(&cam);
 
     cube::Renderer ren;
     cube::Shader shader;
     shader.load(std::string(SHADER_DIR) + "/basic.vert",
         std::string(SHADER_DIR) + "/basic.frag");
-
+ 
     cube::World world(1337);
     const int R = 3;
 
@@ -70,7 +101,7 @@ int main() {
             break;
         }
     }
-    cam.setPosition(glm::vec3(0, groundY + 2, 0)); // +2 — чтоб
+    cam.setPosition(glm::vec3(0, groundY + 1.7f, 0)); // 1.7 - примерная высота глаз
 
     while (!win.shouldClose()) {
         float dt = win.deltaTime();
