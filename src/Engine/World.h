@@ -34,6 +34,9 @@ namespace cube {
         template<class Fn>
         void drawVisible(int cx, int cz, int R, Fn fn);
 
+        // Проверка наличия блока по мировым координатам
+        bool isBlockAt(int wx, int wy, int wz) const;
+
     private:
         void generate(Chunk&);
 

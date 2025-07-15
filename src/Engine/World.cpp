@@ -26,3 +26,19 @@ void World::ensureRadius(int cx, int cz, int R) {
         if (abs(dx) > R || abs(dz) > R) it = m_map.erase(it); else ++it;
     }
 }
+
+// Проверка наличия блока по мировым координатам
+bool World::isBlockAt(int wx, int wy, int wz) const {
+    if (wy < 0 || wy >= CHUNK_SIZE) return false; // только один слой чанков по y
+    int cx = wx / CHUNK_SIZE;
+    int cz = wz / CHUNK_SIZE;
+    int lx = wx % CHUNK_SIZE;
+    int lz = wz % CHUNK_SIZE;
+    if (lx < 0) { cx -= 1; lx += CHUNK_SIZE; }
+    if (lz < 0) { cz -= 1; lz += CHUNK_SIZE; }
+    ChunkKey k{ cx, cz };
+    auto it = m_map.find(k);
+    if (it == m_map.end()) return false;
+    const Chunk& chunk = it->second->chunk;
+    return chunk.at(lx, wy, lz).id != 0;
+}
