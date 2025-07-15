@@ -4,33 +4,36 @@
 #include "Engine/World.h"
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/glm.hpp>
+#include <algorithm>
 
-// Проверка точки в мире на коллизию
+struct Player {
+    glm::vec3 pos;
+    float yaw = -90.f;
+    float pitch = 0.f;
+    float velocityY = 0.f;
+    bool onGround = false;
+    glm::vec3 front() const {
+        float yawRad = glm::radians(yaw);
+        float pitchRad = glm::radians(pitch);
+        return glm::normalize(glm::vec3(
+            cos(pitchRad) * cos(yawRad),
+            sin(pitchRad),
+            cos(pitchRad) * sin(yawRad)
+        ));
+    }
+};
+
 bool isPointBlocked(const cube::World& world, const glm::vec3& point) {
     return world.isBlockAt(int(floor(point.x)), int(floor(point.y)), int(floor(point.z)));
 }
 
-// Проверка, что вокруг позиции нет блоков (включая голову и точку перед камерой)
-bool isFree(const cube::World& world, const glm::vec3& pos, const glm::vec3& front, float radius = 0.49f) {
-    // Проверка центра
+bool isFree(const cube::World& world, const glm::vec3& pos, float radius = 0.49f) {
     if (isPointBlocked(world, pos))
         return false;
-
-    // Проверка "головы" (точка выше центра)
     if (isPointBlocked(world, pos + glm::vec3(0.0f, radius, 0.0f)))
         return false;
-
-    // Проверка "ног" (точка ниже центра)
     if (isPointBlocked(world, pos + glm::vec3(0.0f, -radius, 0.0f)))
         return false;
-
-    // Проверка нескольких точек перед камерой на разном расстоянии
-    for (float dist = 0.1f; dist <= 0.5f; dist += 0.1f) {
-        if (isPointBlocked(world, pos + front * dist))
-            return false;
-    }
-
-    // Проверка по шести направлениям
     for (int axis = 0; axis < 3; ++axis) {
         for (int sign = -1; sign <= 1; sign += 2) {
             glm::vec3 offset(0.0f);
@@ -42,47 +45,51 @@ bool isFree(const cube::World& world, const glm::vec3& pos, const glm::vec3& fro
     return true;
 }
 
-// Перемещение камеры с учётом коллизии (сначала диагонально, потом по осям)
-void moveWithCollision(cube::Camera& cam, const cube::World& world, const glm::vec3& delta) {
-    glm::vec3 pos = cam.position();
+void movePlayerWithCollision(Player& player, const cube::World& world, const glm::vec3& delta) {
+    glm::vec3 pos = player.pos;
     float radius = 0.49f;
     glm::vec3 tryPos = pos + delta;
-    // Сначала пробуем двигаться по всем осям сразу (диагонально)
-    if (isFree(world, tryPos, cam.front(), radius)) {
-        cam.setPosition(tryPos);
+    if (isFree(world, tryPos, radius)) {
+        player.pos = tryPos;
         return;
     }
-    // Если не получилось — по отдельным осям
     tryPos = pos;
-
-    // X axis
     tryPos.x += delta.x;
-    if (isFree(world, tryPos, cam.front(), radius)) {
+    if (isFree(world, tryPos, radius)) {
         pos.x = tryPos.x;
     }
     tryPos = pos;
-
-    // Y axis (обычно для прыжков/падения)
     tryPos.y += delta.y;
-    if (isFree(world, tryPos, cam.front(), radius)) {
+    if (isFree(world, tryPos, radius)) {
         pos.y = tryPos.y;
     }
     tryPos = pos;
-
-    // Z axis
     tryPos.z += delta.z;
-    if (isFree(world, tryPos, cam.front(), radius)) {
+    if (isFree(world, tryPos, radius)) {
         pos.z = tryPos.z;
     }
+    player.pos = pos;
+}
 
-    cam.setPosition(pos);
+// Проверка: есть ли твёрдая поверхность под игроком (радиус)
+bool isOnGround(const cube::World& world, const glm::vec3& pos, float radius = 0.4f) {
+    for (float dx = -radius; dx <= radius; dx += radius) {
+        for (float dz = -radius; dz <= radius; dz += radius) {
+            glm::vec3 check = pos + glm::vec3(dx, -0.05f, dz);
+            if (!isFree(world, check)) return true;
+        }
+    }
+    return false;
 }
 
 int main() {
     cube::Window win(1280, 720, "Cube World");
     if (!win.init()) return -1;
 
-    // Увеличено значение near clip plane с 0.1f до 0.3f
+    glEnable(GL_DEPTH_TEST);
+
+    const float cameraDistance = 5.0f;
+    const float cameraHeight = 2.5f;
     cube::Camera cam(70.f, 1280.f / 720.f, 0.3f, 1000.f);
     win.captureCursor(true); win.attachCamera(&cam);
 
@@ -90,7 +97,7 @@ int main() {
     cube::Shader shader;
     shader.load(std::string(SHADER_DIR) + "/basic.vert",
         std::string(SHADER_DIR) + "/basic.frag");
- 
+
     cube::World world(1337);
     const int R = 3;
 
@@ -101,19 +108,77 @@ int main() {
             break;
         }
     }
-    cam.setPosition(glm::vec3(0, groundY + 1.7f, 0)); // 1.7 - примерная высота глаз
+    Player player;
+    player.pos = glm::vec3(0, groundY + 1.7f, 0);
+
+    double lastX = 0, lastY = 0;
+    bool firstMouse = true;
 
     while (!win.shouldClose()) {
         float dt = win.deltaTime();
         float spd = 5.f * dt;
-        glm::vec3 right = glm::normalize(glm::cross(cam.front(), glm::vec3(0, 1, 0)));
-        if (glfwGetKey(win.native(), GLFW_KEY_W) == GLFW_PRESS) moveWithCollision(cam, world, spd * cam.front());
-        if (glfwGetKey(win.native(), GLFW_KEY_S) == GLFW_PRESS) moveWithCollision(cam, world, -spd * cam.front());
-        if (glfwGetKey(win.native(), GLFW_KEY_D) == GLFW_PRESS) moveWithCollision(cam, world, spd * right);
-        if (glfwGetKey(win.native(), GLFW_KEY_A) == GLFW_PRESS) moveWithCollision(cam, world, -spd * right);
+        float gravity = 18.0f;
+        float jumpVel = 8.0f;
 
-        int cx = int(floor(cam.position().x)) / cube::CHUNK_SIZE;
-        int cz = int(floor(cam.position().z)) / cube::CHUNK_SIZE;
+        // --- Управление мышью (yaw/pitch) ---
+        double dx = 0, dy = 0;
+        glfwGetCursorPos(win.native(), &dx, &dy);
+        if (firstMouse) { lastX = dx; lastY = dy; firstMouse = false; }
+        float sens = 0.15f;
+        player.yaw += float(dx - lastX) * sens;
+        player.pitch -= float(dy - lastY) * sens;
+        player.pitch = std::clamp(player.pitch, -89.f, 89.f);
+        lastX = dx; lastY = dy;
+
+        // --- Движение по WASD ---
+        glm::vec3 forward = player.front();
+        glm::vec3 right = glm::normalize(glm::cross(forward, glm::vec3(0, 1, 0)));
+        glm::vec3 move(0.0f);
+        if (glfwGetKey(win.native(), GLFW_KEY_W) == GLFW_PRESS) move += glm::normalize(glm::vec3(forward.x, 0, forward.z)) * spd;
+        if (glfwGetKey(win.native(), GLFW_KEY_S) == GLFW_PRESS) move -= glm::normalize(glm::vec3(forward.x, 0, forward.z)) * spd;
+        if (glfwGetKey(win.native(), GLFW_KEY_D) == GLFW_PRESS) move += right * spd;
+        if (glfwGetKey(win.native(), GLFW_KEY_A) == GLFW_PRESS) move -= right * spd;
+
+        // --- Физика: гравитация и прыжки ---
+        player.velocityY -= gravity * dt;
+        if (player.velocityY < -gravity) player.velocityY = -gravity;
+        glm::vec3 velMove = move;
+        velMove.y = player.velocityY * dt;
+        float prevY = player.pos.y;
+        movePlayerWithCollision(player, world, velMove);
+        // Проверка на землю (радиус)
+        if (isOnGround(world, player.pos)) {
+            player.onGround = true;
+            player.velocityY = 0.f;
+            player.pos.y = floor(player.pos.y) + 0.5f;
+        } else {
+            player.onGround = false;
+        }
+        // Прыжок
+        if (player.onGround && glfwGetKey(win.native(), GLFW_KEY_SPACE) == GLFW_PRESS) {
+            player.velocityY = jumpVel;
+            player.onGround = false;
+        }
+
+        // --- Камера третьего лица ---
+        glm::vec3 camTarget = player.pos + glm::vec3(0, 0.7f, 0);
+        glm::vec3 camBack = -player.front();
+        glm::vec3 camPos = camTarget + camBack * cameraDistance + glm::vec3(0, cameraHeight, 0);
+        // Raycast: не позволять камере попадать внутрь блоков
+        glm::vec3 dir = glm::normalize(camPos - camTarget);
+        float maxDist = glm::length(camPos - camTarget);
+        float safeDist = maxDist;
+        for (float t = 0.0f; t < maxDist; t += 0.2f) {
+            glm::vec3 p = camTarget + dir * t;
+            if (!isFree(world, p, 0.3f)) { safeDist = t - 0.2f; break; }
+        }
+        camPos = camTarget + dir * std::max(safeDist, 1.0f);
+        cam.setPosition(camPos);
+        cam.addYawPitch(0, 0);
+        cam.setFront(glm::normalize(camTarget - camPos));
+
+        int cx = int(floor(player.pos.x)) / cube::CHUNK_SIZE;
+        int cz = int(floor(player.pos.z)) / cube::CHUNK_SIZE;
         world.ensureRadius(cx, cz, R);
 
         ren.clear(); shader.use();
@@ -124,7 +189,37 @@ int main() {
             glUniformMatrix4fv(glGetUniformLocation(shader.program(), "uMVP"),
                 1, GL_FALSE, glm::value_ptr(mvp));
             m.draw();
-            });
+        });
+
+        // Нарисовать игрока (ручной куб OpenGL, совместимость)
+        glUseProgram(0);
+        glMatrixMode(GL_PROJECTION);
+        glLoadMatrixf(glm::value_ptr(cam.projection()));
+        glMatrixMode(GL_MODELVIEW);
+        glm::mat4 mv = cam.view() * glm::translate(glm::mat4(1), player.pos);
+        glLoadMatrixf(glm::value_ptr(mv));
+        glColor3f(1, 0, 0);
+        float s = 0.5f;
+        glBegin(GL_QUADS);
+        // Нижняя грань
+        glVertex3f(-s, -s, -s); glVertex3f(s, -s, -s); glVertex3f(s, -s, s); glVertex3f(-s, -s, s);
+        // Верхняя грань
+        glVertex3f(-s, s, -s); glVertex3f(s, s, -s); glVertex3f(s, s, s); glVertex3f(-s, s, s);
+        // Передняя грань
+        glVertex3f(-s, -s, s); glVertex3f(s, -s, s); glVertex3f(s, s, s); glVertex3f(-s, s, s);
+        // Задняя грань
+        glVertex3f(-s, -s, -s); glVertex3f(s, -s, -s); glVertex3f(s, s, -s); glVertex3f(-s, s, -s);
+        // Левая грань
+        glVertex3f(-s, -s, -s); glVertex3f(-s, -s, s); glVertex3f(-s, s, s); glVertex3f(-s, s, -s);
+        // Правая грань
+        glVertex3f(s, -s, -s); glVertex3f(s, -s, s); glVertex3f(s, s, s); glVertex3f(s, s, -s);
+        glEnd();
+        // Восстановить шейдер и матрицы для следующего кадра
+        shader.use();
+        glMatrixMode(GL_PROJECTION);
+        glLoadIdentity();
+        glMatrixMode(GL_MODELVIEW);
+        glLoadIdentity();
 
         win.poll();
     }

@@ -14,6 +14,7 @@ namespace cube {
         void setPosition(const glm::vec3& p) { m_pos = p; }
         void addYawPitch(float yawOff, float pitchOff);
         void move(const glm::vec3& delta) { m_pos += delta; }
+        void setFront(const glm::vec3& front) { m_front = front; }
 
         const glm::vec3& front() const { return m_front; }
         const glm::vec3& position()const { return m_pos; }
