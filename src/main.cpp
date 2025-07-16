@@ -1,4 +1,4 @@
-#include "Engine/Window.h"
+п»ї#include "Engine/Window.h"
 #include "Engine/Renderer.h"
 #include "Engine/Shader.h"
 #include "Engine/World.h"
@@ -6,6 +6,43 @@
 #include <glm/glm.hpp>
 #include <algorithm>
 #include <iostream>
+
+static GLuint gPlayerVAO = 0, gPlayerVBO = 0;
+auto initPlayerMesh = []()
+    {
+        if (gPlayerVAO) return;          // СѓР¶Рµ Р±С‹Р»
+        struct V { glm::vec3 p, n; };
+        const float h = 0.5f;
+        const V verts[] = {
+            /* ZвЂ‘ */ {{-h,-h,-h},{ 0, 0,-1}}, {{-h, h,-h},{ 0, 0,-1}}, {{ h, h,-h},{ 0, 0,-1}},
+                      {{-h,-h,-h},{ 0, 0,-1}}, {{ h, h,-h},{ 0, 0,-1}}, {{ h,-h,-h},{ 0, 0,-1}},
+
+                      /* Z+ */ {{-h,-h, h},{ 0, 0, 1}}, {{ h,-h, h},{ 0, 0, 1}}, {{ h, h, h},{ 0, 0, 1}},
+                                {{-h,-h, h},{ 0, 0, 1}}, {{ h, h, h},{ 0, 0, 1}}, {{-h, h, h},{ 0, 0, 1}},
+
+                                /* Y+ */ {{-h, h,-h},{ 0, 1, 0}}, {{-h, h, h},{ 0, 1, 0}}, {{ h, h, h},{ 0, 1, 0}},
+                                          {{-h, h,-h},{ 0, 1, 0}}, {{ h, h, h},{ 0, 1, 0}}, {{ h, h,-h},{ 0, 1, 0}},
+
+                                          /* YвЂ‘ */ {{-h,-h,-h},{ 0,-1, 0}}, {{ h,-h,-h},{ 0,-1, 0}}, {{ h,-h, h},{ 0,-1, 0}},
+                                                    {{-h,-h,-h},{ 0,-1, 0}}, {{ h,-h, h},{ 0,-1, 0}}, {{-h,-h, h},{ 0,-1, 0}},
+
+                                                    /* XвЂ‘ */ {{-h,-h,-h},{-1, 0, 0}}, {{-h,-h, h},{-1, 0, 0}}, {{-h, h, h},{-1, 0, 0}},
+                                                              {{-h,-h,-h},{-1, 0, 0}}, {{-h, h, h},{-1, 0, 0}}, {{-h, h,-h},{-1, 0, 0}},
+
+                                                              /* X+ */ {{ h,-h,-h},{ 1, 0, 0}}, {{ h, h,-h},{ 1, 0, 0}}, {{ h, h, h},{ 1, 0, 0}},
+                                                                        {{ h,-h,-h},{ 1, 0, 0}}, {{ h, h, h},{ 1, 0, 0}}, {{ h,-h, h},{ 1, 0, 0}},
+        };
+        glGenVertexArrays(1, &gPlayerVAO);
+        glGenBuffers(1, &gPlayerVBO);
+        glBindVertexArray(gPlayerVAO);
+        glBindBuffer(GL_ARRAY_BUFFER, gPlayerVBO);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(verts), verts, GL_STATIC_DRAW);
+        glEnableVertexAttribArray(0); // РїРѕР·РёС†РёСЏ
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(V), (void*)0);
+        glEnableVertexAttribArray(1); // РЅРѕСЂРјР°Р»СЊ
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(V), (void*)offsetof(V, n));
+        glBindVertexArray(0);
+    };
 
 struct Player {
     glm::vec3 pos;
@@ -76,12 +113,12 @@ bool isOnGround(const cube::World& world,
     const glm::vec3& pos,
     float radius = 0.49f)
 {
-    // Чуть ниже низа сферы
+    // Р§СѓС‚СЊ РЅРёР¶Рµ РЅРёР·Р° СЃС„РµСЂС‹
     const float yProbe = -(radius + 0.05f);
 
-    // Радиусы для выборки
-    const float c = radius * 0.8f;          // осевые
-    const float d = c * 0.70710678f;        // диагонали (~sqrt(2)/2)
+    // Р Р°РґРёСѓСЃС‹ РґР»СЏ РІС‹Р±РѕСЂРєРё
+    const float c = radius * 0.8f;          // РѕСЃРµРІС‹Рµ
+    const float d = c * 0.70710678f;        // РґРёР°РіРѕРЅР°Р»Рё (~sqrt(2)/2)
 
     static const glm::vec3 probe[] = {
         { 0,  yProbe,  0 },
@@ -131,14 +168,16 @@ int main() {
 
     bool ground = isOnGround(world, player.pos, 0.49f);
 
+    initPlayerMesh();
+
     while (!win.shouldClose()) {
         float dt = win.deltaTime();
-        if (dt > 0.1f) dt = 0.1f; // ограничение шага физики
+        if (dt > 0.1f) dt = 0.1f; // РѕРіСЂР°РЅРёС‡РµРЅРёРµ С€Р°РіР° С„РёР·РёРєРё
         float spd = 5.f * dt;
         float gravity = 18.0f;
         float jumpVel = 8.0f;
 
-        // --- Управление мышью (yaw/pitch) ---
+        // --- РЈРїСЂР°РІР»РµРЅРёРµ РјС‹С€СЊСЋ (yaw/pitch) ---
         double dx = 0, dy = 0;
         glfwGetCursorPos(win.native(), &dx, &dy);
         if (firstMouse) { lastX = dx; lastY = dy; firstMouse = false; }
@@ -148,7 +187,7 @@ int main() {
         player.pitch = std::clamp(player.pitch, -89.f, 89.f);
         lastX = dx; lastY = dy;
 
-        // --- Движение по WASD ---
+        // --- Р”РІРёР¶РµРЅРёРµ РїРѕ WASD ---
         glm::vec3 forward = player.front();
         glm::vec3 right = glm::normalize(glm::cross(forward, glm::vec3(0, 1, 0)));
         glm::vec3 move(0.0f);
@@ -157,33 +196,33 @@ int main() {
         if (glfwGetKey(win.native(), GLFW_KEY_D) == GLFW_PRESS) move += right * spd;
         if (glfwGetKey(win.native(), GLFW_KEY_A) == GLFW_PRESS) move -= right * spd;
 
-        // --- Физика: гравитация и прыжки ---
+        // --- Р¤РёР·РёРєР°: РіСЂР°РІРёС‚Р°С†РёСЏ Рё РїСЂС‹Р¶РєРё ---
         player.velocityY -= gravity * dt;
         if (player.velocityY < -gravity) player.velocityY = -gravity;
         glm::vec3 velMove = move;
         velMove.y = player.velocityY * dt;
         float prevY = player.pos.y;
         movePlayerWithCollision(player, world, velMove);
-        // Проверка на землю (только центр)
+        // РџСЂРѕРІРµСЂРєР° РЅР° Р·РµРјР»СЋ (С‚РѕР»СЊРєРѕ С†РµРЅС‚СЂ)
         bool ground = isOnGround(world, player.pos);
         player.onGround = ground;
         if (ground) {
             player.velocityY = 0.f;
             player.pos.y = floor(player.pos.y) + 0.5f;
         }
-        // Отладочный вывод (обновление одной строки)
+        // РћС‚Р»Р°РґРѕС‡РЅС‹Р№ РІС‹РІРѕРґ (РѕР±РЅРѕРІР»РµРЅРёРµ РѕРґРЅРѕР№ СЃС‚СЂРѕРєРё)
         std::cout << "\rpos: " << player.pos.x << ", " << player.pos.y << ", " << player.pos.z << " onGround: " << ground << std::flush;
-        // Прыжок
+        // РџСЂС‹Р¶РѕРє
         if (player.onGround && glfwGetKey(win.native(), GLFW_KEY_SPACE) == GLFW_PRESS) {
             player.velocityY = jumpVel;
             player.onGround = false;
         }
 
-        // --- Камера третьего лица ---
+        // --- РљР°РјРµСЂР° С‚СЂРµС‚СЊРµРіРѕ Р»РёС†Р° ---
         glm::vec3 camTarget = player.pos + glm::vec3(0, 0.7f, 0);
         glm::vec3 camBack = -player.front();
         glm::vec3 camPos = camTarget + camBack * cameraDistance + glm::vec3(0, cameraHeight, 0);
-        // Raycast: не позволять камере попадать внутрь блоков
+        // Raycast: РЅРµ РїРѕР·РІРѕР»СЏС‚СЊ РєР°РјРµСЂРµ РїРѕРїР°РґР°С‚СЊ РІРЅСѓС‚СЂСЊ Р±Р»РѕРєРѕРІ
         glm::vec3 dir = glm::normalize(camPos - camTarget);
         float maxDist = glm::length(camPos - camTarget);
         float safeDist = maxDist;
@@ -210,30 +249,16 @@ int main() {
             m.draw();
         });
 
-        // Нарисовать игрока (ручной куб OpenGL, совместимость)
-        glUseProgram(0);
-        glMatrixMode(GL_PROJECTION);
-        glLoadMatrixf(glm::value_ptr(cam.projection()));
-        glMatrixMode(GL_MODELVIEW);
-        glm::mat4 mv = cam.view() * glm::translate(glm::mat4(1), player.pos);
-        glLoadMatrixf(glm::value_ptr(mv));
-        glColor3f(1, 0, 0);
-        float s = 0.5f;
-        glBegin(GL_QUADS);
-        // Нижняя грань
-        glVertex3f(-s, -s, -s); glVertex3f(s, -s, -s); glVertex3f(s, -s, s); glVertex3f(-s, -s, s);
-        // Верхняя грань
-        glVertex3f(-s, s, -s); glVertex3f(s, s, -s); glVertex3f(s, s, s); glVertex3f(-s, s, s);
-        // Передняя грань
-        glVertex3f(-s, -s, s); glVertex3f(s, -s, s); glVertex3f(s, s, s); glVertex3f(-s, s, s);
-        // Задняя грань
-        glVertex3f(-s, -s, -s); glVertex3f(s, -s, -s); glVertex3f(s, s, -s); glVertex3f(-s, s, -s);
-        // Левая грань
-        glVertex3f(-s, -s, -s); glVertex3f(-s, -s, s); glVertex3f(-s, s, s); glVertex3f(-s, s, -s);
-        // Правая грань
-        glVertex3f(s, -s, -s); glVertex3f(s, -s, s); glVertex3f(s, s, s); glVertex3f(s, s, -s);
-        glEnd();
-        // Восстановить шейдер и матрицы для следующего кадра
+        glm::mat4 model = glm::translate(glm::mat4(1.0f), player.pos);
+        glm::mat4 mvp = cam.projection() * cam.view() * model;
+        shader.use();
+        glUniformMatrix4fv(glGetUniformLocation(shader.program(), "uMVP"),
+            1, GL_FALSE, glm::value_ptr(mvp));
+        glBindVertexArray(gPlayerVAO);
+        glDrawArrays(GL_TRIANGLES, 0, 36);
+        glBindVertexArray(0);
+
+        // Р’РѕСЃСЃС‚Р°РЅРѕРІРёС‚СЊ С€РµР№РґРµСЂ Рё РјР°С‚СЂРёС†С‹ РґР»СЏ СЃР»РµРґСѓСЋС‰РµРіРѕ РєР°РґСЂР°
         shader.use();
         glMatrixMode(GL_PROJECTION);
         glLoadIdentity();
