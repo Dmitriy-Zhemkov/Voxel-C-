@@ -5,6 +5,7 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/glm.hpp>
 #include <algorithm>
+#include <iostream>
 
 struct Player {
     glm::vec3 pos;
@@ -71,14 +72,28 @@ void movePlayerWithCollision(Player& player, const cube::World& world, const glm
     player.pos = pos;
 }
 
-// Проверка: есть ли твёрдая поверхность под игроком (радиус)
-bool isOnGround(const cube::World& world, const glm::vec3& pos, float radius = 0.4f) {
-    for (float dx = -radius; dx <= radius; dx += radius) {
-        for (float dz = -radius; dz <= radius; dz += radius) {
-            glm::vec3 check = pos + glm::vec3(dx, -0.05f, dz);
-            if (!isFree(world, check)) return true;
-        }
-    }
+bool isOnGround(const cube::World& world,
+    const glm::vec3& pos,
+    float radius = 0.49f)
+{
+    // Чуть ниже низа сферы
+    const float yProbe = -(radius + 0.05f);
+
+    // Радиусы для выборки
+    const float c = radius * 0.8f;          // осевые
+    const float d = c * 0.70710678f;        // диагонали (~sqrt(2)/2)
+
+    static const glm::vec3 probe[] = {
+        { 0,  yProbe,  0 },
+        {  c, yProbe,  0 }, { -c, yProbe, 0 },
+        {  0, yProbe,  c }, {  0, yProbe,-c },
+        {  d, yProbe,  d }, { -d, yProbe, d },
+        {  d, yProbe, -d }, { -d, yProbe,-d }
+    };
+
+    for (auto o : probe)
+        if (isPointBlocked(world, pos + o))
+            return true;
     return false;
 }
 
@@ -114,8 +129,11 @@ int main() {
     double lastX = 0, lastY = 0;
     bool firstMouse = true;
 
+    bool ground = isOnGround(world, player.pos, 0.49f);
+
     while (!win.shouldClose()) {
         float dt = win.deltaTime();
+        if (dt > 0.1f) dt = 0.1f; // ограничение шага физики
         float spd = 5.f * dt;
         float gravity = 18.0f;
         float jumpVel = 8.0f;
@@ -146,14 +164,15 @@ int main() {
         velMove.y = player.velocityY * dt;
         float prevY = player.pos.y;
         movePlayerWithCollision(player, world, velMove);
-        // Проверка на землю (радиус)
-        if (isOnGround(world, player.pos)) {
-            player.onGround = true;
+        // Проверка на землю (только центр)
+        bool ground = isOnGround(world, player.pos);
+        player.onGround = ground;
+        if (ground) {
             player.velocityY = 0.f;
             player.pos.y = floor(player.pos.y) + 0.5f;
-        } else {
-            player.onGround = false;
         }
+        // Отладочный вывод (обновление одной строки)
+        std::cout << "\rpos: " << player.pos.x << ", " << player.pos.y << ", " << player.pos.z << " onGround: " << ground << std::flush;
         // Прыжок
         if (player.onGround && glfwGetKey(win.native(), GLFW_KEY_SPACE) == GLFW_PRESS) {
             player.velocityY = jumpVel;
